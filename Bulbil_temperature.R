@@ -53,6 +53,11 @@ num_cols <- grep("^X[0-9]+$", names(temp_data), value = TRUE)
 temp_data[num_cols] <- lapply(temp_data[num_cols], as.numeric)
 
 
+# filter time to exclude lab  ---------------------------------------------
+temp_data<- temp_data |>
+  filter(Time <= as.POSIXct("2026-01-19 23:59:59"))
+
+
 
 
 # test plot ---------------------------------------------------------------
@@ -109,12 +114,14 @@ ggplot(group_summary, aes(Time, mean_temp, colour = treatment)) +
   theme_bw()
 
 
+# boxplot -----------------------------------------------------------------
+daily_mean <- temp_data |> 
+  group_by(treatment, Date = as.Date(Time)) |> 
+  summarise(daily_temp = mean(black_mean, na.rm = TRUE), .groups = "drop")
 
-
-
-
-
-
+ggplot(daily_mean, aes(treatment, daily_temp, fill = treatment)) +
+  geom_boxplot() +
+  theme_bw()
 
 
 
