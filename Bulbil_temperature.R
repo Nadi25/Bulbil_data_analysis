@@ -12,7 +12,7 @@ library(lmerTest)
 library(emmeans)
 library(multcomp)
 
-theme_set(theme_bw(base_size = 20))
+theme_set(theme_bw(base_size = 25))
 
 # import data -------------------------------------------------------------
 # example to see structure
@@ -49,18 +49,18 @@ process_file <- function(file) {
 }
 
 # combine the files with the function above
-temp_data <- bind_rows(lapply(files, process_file))
+temperature_data <- bind_rows(lapply(files, process_file))
 
 # fix time into time not character
-temp_data$Time <- as.POSIXct(temp_data$Time, format = "%Y-%m-%d %H:%M:%S")
+temperature_data$Time <- as.POSIXct(temperature_data$Time, format = "%Y-%m-%d %H:%M:%S")
 
-num_cols <- grep("^X[0-9]+$", names(temp_data), value = TRUE)
-temp_data[num_cols] <- lapply(temp_data[num_cols], as.numeric)
+num_cols <- grep("^X[0-9]+$", names(temperature_data), value = TRUE)
+temperature_data[num_cols] <- lapply(temperature_data[num_cols], as.numeric)
 
 
 # filter time to exclude lab in January ---------------------------------------------
 # beginning looks ok? leave for now
-temp_data<- temp_data |>
+temp_data<- temperature_data |>
   filter(Time <= as.POSIXct("2026-01-19 23:59:59"))
 
 
@@ -239,14 +239,25 @@ temp_timeline_mean_min_max <- ggplot(daily_summary2,
               colour = NA) +
   geom_line(size = 1) +
   labs(y = "Daily mean temperature (°C)",
-       x = "Time")
+       x = NULL)+
+  theme_minimal()+
+  theme(
+    axis.text = element_text(size = 22),     # axes label
+    axis.title = element_text(size = 24),
+    legend.text = element_text(size = 20),   # legend
+    legend.title = element_text(size = 22) 
+  )
 temp_timeline_mean_min_max
 
-ggsave(filename = "Bulbil_temperature_daily_mean_min_max_timeline_treatment.png", 
+ggsave(filename = "Bulbil_temperature_daily_mean_min_max_timeline_treatment2.png", 
        plot = temp_timeline_mean_min_max, 
        path = "Output/", 
        width = 12, height = 7)
 
+ggsave(filename = "Bulbil_temperature_daily_mean_min_max_timeline_treatment3.png", 
+       plot = temp_timeline_mean_min_max, 
+       path = "Output/", 
+       width = 18, height = 5)
 
 
 # boxplot for daily mean per treatment ------------------------------------
@@ -298,6 +309,9 @@ model_mean2 <- lmerTest::lmer(daily_mean ~ Treatment + (1 | Date),
                              data = daily_stats)
 summary(model_mean2)
 
+# test different treatments against each other
+emmeans(model_mean2, pairwise ~ Treatment)
+
 ggplot(daily_summary2, aes(Treatment, min_temp, fill = Treatment)) +
   geom_boxplot(outlier.shape = NA) +
   geom_jitter(width = 0.1, alpha = 0.3) +
@@ -324,6 +338,77 @@ ggsave(filename = "Bulbil_temperature_daily_min_boxplot_treatment_pred_values.pn
        plot = temp_boxplot_daily_min, 
        path = "Output/", 
        width = 10, height = 8)
+
+
+
+# filter time in the climate room -----------------------------------------
+temp_data_lab <- temperature_data |>
+  filter(Time >= as.POSIXct("2026-01-20 23:59:59"))
+
+# delete first column X ---------------------------------------------------
+temp_data_lab <- temp_data_lab |> 
+  select(-X)
+
+
+
+# bring data into long format ---------------------------------------------
+temp_data_lab_long <- temp_data_lab |>
+  pivot_longer(
+    cols = matches("^X[0-9]+$"),   # only X1, X2, ...
+    names_to = "sensor",
+    values_to = "temperature"
+  )
+
+
+# plot --------------------------------------------------------------------
+ggplot(temp_data_lab_long, aes(Time, temperature, colour = sensor))+
+  geom_line()
+
+
+
+
+# check day vs night time temp --------------------------------------------
+# day is from 8-20
+temp_data_lab_long <- temp_data_lab_long |>
+  mutate(
+    hour = as.integer(format(Time, "%H")),
+    day_night = if_else(hour >= 8 & hour < 20, "Day", "Night")
+  )
+
+ggplot(temp_data_lab_long,
+       aes(day_night, temperature, fill = day_night)) +
+  geom_boxplot() +
+  labs(x = "", y = "Temperature (°C)")
+
+day_night <- ggplot(temp_data_lab_long,
+       aes(Time, temperature, colour = day_night)) +
+  geom_point(size = 1) 
+day_night
+
+ggsave(filename = "Bulbil_temperature_climate_room_day_night.png", 
+       plot = day_night, 
+       path = "Output/", 
+       width = 10, height = 8)
+
+
+
+# check heater ------------------------------------------------------------
+# define start and end
+start_time <- min(temp_data_lab_long$Time, na.rm = TRUE)
+end_time   <- start_time + 6*24*60*60   # + 6 days
+
+# filter first two days
+temp_2days <- temp_data_lab_long |>
+  filter(Time >= start_time,
+         Time <= end_time)
+
+# plot each logger separately
+ggplot(temp_2days,
+       aes(Time, temperature, colour = origin_treatment)) +
+  geom_line()
+
+
+
 
 
 
